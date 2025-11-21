@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptionOne: Master the Market</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
+    
+    <!-- Prop-types -->
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+
+    <!-- Recharts -->
+    <script src="https://unpkg.com/recharts@2.12.0/umd/Recharts.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .neon-text {
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+
+        .animate-pulse-green {
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } = Recharts;
+
+        // --- INTERNAL ICON COMPONENTS (Replacing Lucide to prevent UMD errors) ---
+        const IconBase = ({ children, color = "currentColor", size = 24, className = "" }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width={size} 
+                height={size} 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke={color} 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className}
+            >
+                {children}
+            </svg>
+        );
+
+        const TrendingUp = (props) => (
+            <IconBase {...props}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></IconBase>
+        );
+        const Shield = (props) => (
+            <IconBase {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></IconBase>
+        );
+        const BookOpen = (props) => (
+            <IconBase {...props}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></IconBase>
+        );
+        const AlertTriangle = (props) => (
+            <IconBase {...props}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></IconBase>
+        );
+        const Play = (props) => (
+            <IconBase {...props}><polygon points="5 3 19 12 5 21 5 3"></polygon></IconBase>
+        );
+        const Briefcase = (props) => (
+            <IconBase {...props}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></IconBase>
+        );
+        const Zap = (props) => (
+            <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></IconBase>
+        );
+
+        // --- CONSTANTS & DATA ---
+
+        const LEVELS = [
+            { id: 0, title: "The Foundation", xpReq: 0 },
+            { id: 1, title: "Level 1: Equity Owner", xpReq: 100 },
+            { id: 2, title: "Level 2: The Call Option", xpReq: 300 },
+            { id: 3, title: "Level 3: The Put Hedge", xpReq: 600 },
+            { id: 4, title: "Level 4: The Architect", xpReq: 1000 }
+        ];
+
+        const STOCKS = {
+            TC: { symbol: 'TC', name: 'TechCorp', basePrice: 150, volatility: 0.02 },
+            SC: { symbol: 'SC', name: 'SafeCo', basePrice: 50, volatility: 0.005 }
+        };
+
+        // --- COMPONENTS ---
+
+        const ProgressBar = ({ current, max, label }) => (
+            <div className="w-full">
+                <div className="flex justify-between text-xs mb-1 text-slate-400">
+                    <span>{label}</span>
+                    <span>{Math.min(100, Math.round((current/max)*100))}%</span>
+                </div>
+                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div 
+                        className="h-full bg-blue-500 transition-all duration-500 ease-out"
+                        style={{ width: `${Math.min(100, (current/max)*100)}%` }}
+                    />
+                </div>
+            </div>
+        );
+
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-slate-800 border border-slate-600 rounded-xl p-6 max-w-lg w-full shadow-2xl animate-fade-in">
+                        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <BookOpen className="text-blue-400" size={24} />
+                            {title}
+                        </h2>
+                        <div className="text-slate-300 space-y-4 mb-6 max-h-[60vh] overflow-y-auto">
+                            {children}
+                        </div>
+                        <button 
+                            onClick={onClose}
+                            className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-colors"
+                        >
+                            Got it, let's trade!
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP COMPONENT ---
+
+        const App = () => {
+            // -- STATE --
+            const [xp, setXp] = useState(0);
+            const [level, setLevel] = useState(0);
+            const [balance, setBalance] = useState(10000);
+            const [portfolio, setPortfolio] = useState([]);
+            const [marketTime, setMarketTime] = useState(0);
+            const [stockData, setStockData] = useState([]); // History for chart
+            const [currentPrice, setCurrentPrice] = useState(STOCKS.TC.basePrice);
+            const [modalOpen, setModalOpen] = useState(true);
+            const [notification, setNotification] = useState(null);
+            const [simSpeed, setSimSpeed] = useState(1000); // ms per tick
+            const [isPaused, setIsPaused] = useState(false);
+            
+            // Interactive Tutorial State
+            const [tutorialStep, setTutorialStep] = useState(0);
+            const [taskComplete, setTaskComplete] = useState(false);
+
+            // Refs for simulation intervals
+            const intervalRef = useRef(null);
+
+            // -- INITIALIZATION --
+            useEffect(() => {
+                // Initialize stock history
+                const initialHistory = [];
+                let price = STOCKS.TC.basePrice;
+                for (let i = 0; i < 50; i++) {
+                    price = price * (1 + (Math.random() * 0.04 - 0.02)); // Random walk
+                    initialHistory.push({ time: i, price: parseFloat(price.toFixed(2)) });
+                }
+                setStockData(initialHistory);
+                setCurrentPrice(price);
+            }, []);
+
+            // -- MARKET SIMULATOR ENGINE --
+            useEffect(() => {
+                if (isPaused) return;
+
+                intervalRef.current = setInterval(() => {
+                    setMarketTime(prev => prev + 1);
+                    
+                    setCurrentPrice(prev => {
+                        // Random Walk with slight drift based on "market sentiment" (simulated)
+                        const drift = 0.0002; 
+                        const volatility = STOCKS.TC.volatility;
+                        const change = prev * (drift + (Math.random() * volatility * 2 - volatility));
+                        const newPrice = Math.max(0.01, prev + change);
+                        
+                        setStockData(currentHistory => {
+                            const newHistory = [...currentHistory, { time: marketTime + 50, price: parseFloat(newPrice.toFixed(2)) }];
+                            if (newHistory.length > 60) newHistory.shift(); // Keep chart clean
+                            return newHistory;
+                        });
+                        
+                        return newPrice;
+                    });
+
+                    // Update Option Prices in Portfolio
+                    setPortfolio(prevPortfolio => prevPortfolio.map(pos => {
+                        if (pos.type === 'stock') {
+                            return { ...pos, currentVal: currentPrice };
+                        } else {
+                            // Simple Option Pricing Model Simulation
+                            // Intrinsic Value + Time Value
+                            const timeToExpiry = Math.max(0, pos.expiry - marketTime);
+                            let intrinsic = 0;
+                            
+                            if (pos.type === 'call') intrinsic = Math.max(0, currentPrice - pos.strike);
+                            if (pos.type === 'put') intrinsic = Math.max(0, pos.strike - currentPrice);
+                            
+                            // Time value decays as we get closer to expiry
+                            const timeValue = (timeToExpiry / 100) * (currentPrice * 0.05); 
+                            
+                            return { 
+                                ...pos, 
+                                currentVal: intrinsic + timeValue,
+                                expired: timeToExpiry <= 0
+                            };
+                        }
+                    }));
+
+                }, simSpeed);
+
+                return () => clearInterval(intervalRef.current);
+            }, [marketTime, isPaused, simSpeed, currentPrice]);
+
+            // -- LEVEL UP LOGIC --
+            useEffect(() => {
+                const nextLevel = LEVELS.find(l => l.id === level + 1);
+                if (nextLevel && xp >= nextLevel.xpReq) {
+                    setLevel(prev => prev + 1);
+                    showNotification(`🎉 LEVEL UP! You are now Level ${prev + 1}: ${nextLevel.title}`);
+                    setModalOpen(true); // Open intro for new level
+                    setTaskComplete(false);
+                }
+            }, [xp, level]);
+
+            // -- ACTIONS --
+
+            const buyStock = () => {
+                const cost = currentPrice;
+                if (balance >= cost) {
+                    setBalance(prev => prev - cost);
+                    setPortfolio(prev => [...prev, { 
+                        id: Date.now(), 
+                        type: 'stock', 
+                        symbol: 'TC', 
+                        entry: cost, 
+                        shares: 1, 
+                        currentVal: cost 
+                    }]);
+                    addXP(20);
+                    showNotification("Bought 1 share of TechCorp");
+                    if (level === 1) setTaskComplete(true);
+                } else {
+                    showNotification("Insufficient Funds!", "error");
+                }
+            };
+
+            const buyOption = (type) => {
+                // Simplified Option Chain for Demo
+                const strike = Math.round(currentPrice); 
+                const premium = currentPrice * 0.05; // 5% premium
+                const expiry = marketTime + 100; // 100 ticks
+
+                if (balance >= premium * 100) { // Options contract x100 usually, keeping it 1:1 for simplicity in basics, but let's do x1 for simplicity of math for teens
+                    setBalance(prev => prev - premium);
+                    setPortfolio(prev => [...prev, {
+                        id: Date.now(),
+                        type: type,
+                        symbol: 'TC', 
+                        entry: premium,
+                        strike: strike,
+                        expiry: expiry,
+                        currentVal: premium,
+                        shares: 1
+                    }]);
+                    addXP(50);
+                    showNotification(`Bought 1 ${type.toUpperCase()} Option (Strike: $${strike})`);
+                    if (level === 2 && type === 'call') setTaskComplete(true);
+                    if (level === 3 && type === 'put') setTaskComplete(true);
+                } else {
+                    showNotification("Insufficient Funds!", "error");
+                }
+            };
+
+            const closePosition = (id, currentVal) => {
+                setBalance(prev => prev + currentVal);
+                setPortfolio(prev => prev.filter(p => p.id !== id));
+                const profit = currentVal - (portfolio.find(p => p.id === id).entry);
+                if (profit > 0) addXP(Math.floor(profit));
+                showNotification(`Position closed. P/L: $${profit.toFixed(2)}`);
+            };
+
+            const addXP = (amount) => {
+                setXp(prev => prev + amount);
+            };
+
+            const showNotification = (msg, type='success') => {
+                setNotification({ msg, type });
+                setTimeout(() => setNotification(null), 3000);
+            };
+
+            // -- RENDERERS --
+
+            const renderLessonContent = () => {
+                switch(level) {
+                    case 0:
+                        return (
+                            <>
+                                <p>Welcome, Riva Sanjay.</p>
+                                <p>You are 16. You have time on your side. Albert Einstein reportedly called compound interest the "eighth wonder of the world."</p>
+                                <p className="mt-4 border-l-4 border-blue-500 pl-4 italic">"He who understands it, earns it... he who doesn't... pays it."</p>
+                                <p className="mt-4">In this simulation, you will learn how to trade stocks and options. Your goal isn't just to make money—it's to understand <strong>Risk</strong>.</p>
+                                <p className="mt-4 font-bold text-green-400">Mission: Gain 100 XP to unlock actual trading.</p>
+                                <div className="mt-6 p-4 bg-slate-700 rounded-lg cursor-pointer hover:bg-slate-600 transition" onClick={() => addXP(100)}>
+                                    <div className="flex items-center gap-2">
+                                        <BookOpen size={20} />
+                                        <span>Read: The History of Ownership (Dutch East India Co.)</span>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1">Click to simulate reading & gain XP</p>
+                                </div>
+                            </>
+                        );
+                    case 1:
+                        return (
+                            <>
+                                <h3 className="text-lg font-bold text-white mb-2">Level 1: The Shareholder</h3>
+                                <p>When you buy a stock, you aren't just gambling on a ticker symbol. You are buying <strong>Equity</strong>. You own a tiny piece of that company.</p>
+                                <p className="mt-2">Look at the chart for <strong>TechCorp (TC)</strong>. It moves up and down based on supply and demand.</p>
+                                <p className="mt-4 font-bold text-yellow-400">Task: Buy 1 Share of TechCorp to proceed.</p>
+                            </>
+                        );
+                    case 2:
+                        return (
+                            <>
+                                <h3 className="text-lg font-bold text-white mb-2">Level 2: The Call Option</h3>
+                                <p>Stocks are great, but expensive. What if you could reserve the right to buy a stock later?</p>
+                                <p className="mt-2"><strong>A Call Option</strong> is like a coupon. You pay a small fee (Premium) for the right to buy the stock at a set price (Strike Price) before a deadline.</p>
+                                <ul className="list-disc pl-5 mt-2 space-y-1 text-sm text-slate-300">
+                                    <li>If stock goes UP: Your coupon is valuable!</li>
+                                    <li>If stock goes DOWN: You only lose the premium (the coupon cost).</li>
+                                </ul>
+                                <p className="mt-4 font-bold text-yellow-400">Task: Buy a CALL option. Watch how its value changes faster than the stock!</p>
+                            </>
+                        );
+                    case 3:
+                        return (
+                            <>
+                                <h3 className="text-lg font-bold text-white mb-2">Level 3: The Put (Insurance)</h3>
+                                <p>Markets don't always go up. Sometimes they crash.</p>
+                                <p className="mt-2"><strong>A Put Option</strong> gives you the right to SELL a stock at a specific price. It's like insurance. If the stock crashes to zero, your Put is worth a fortune because you can still sell at the higher Strike Price.</p>
+                                <p className="mt-4 font-bold text-yellow-400">Task: Buy a PUT option to hedge your portfolio.</p>
+                            </>
+                        );
+                    default:
+                        return <p>You are a master, Riva! Keep trading to build your high score.</p>;
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-900 text-slate-200 p-2 md:p-6 pb-20">
+                    {/* Header */}
+                    <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                                <TrendingUp className="text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-white tracking-tight">OptionOne</h1>
+                                <p className="text-xs text-slate-400 uppercase tracking-wider">Riva Sanjay's Trading Terminal</p>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 bg-slate-800 p-2 rounded-xl border border-slate-700">
+                            <div className="px-4 border-r border-slate-700">
+                                <span className="text-xs text-slate-400 block">Balance</span>
+                                <span className="font-mono text-xl text-green-400">${balance.toFixed(2)}</span>
+                            </div>
+                            <div className="px-4 border-r border-slate-700">
+                                <span className="text-xs text-slate-400 block">Net Worth</span>
+                                <span className="font-mono text-xl text-white">
+                                    ${(balance + portfolio.reduce((acc, p) => acc + p.currentVal, 0)).toFixed(2)}
+                                </span>
+                            </div>
+                            <div className="px-4">
+                                <span className="text-xs text-slate-400 block">Level {level}</span>
+                                <div className="w-24 mt-1">
+                                    <ProgressBar current={xp} max={LEVELS[level+1]?.xpReq || xp + 1000} />
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        {/* LEFT COLUMN: Market & Controls */}
+                        <div className="lg:col-span-2 space-y-6">
+                            
+                            {/* Chart Card */}
+                            <div className="glass-panel rounded-xl p-4 shadow-xl">
+                                <div className="flex justify-between items-center mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-xl font-bold text-white">TechCorp (TC)</h2>
+                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${stockData.length > 1 && stockData[stockData.length-1].price >= stockData[stockData.length-2].price ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                            ${currentPrice.toFixed(2)}
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setIsPaused(!isPaused)} className="p-2 bg-slate-700 rounded hover:bg-slate-600">
+                                            {isPaused ? <Play size={16} /> : <div className="w-4 h-4 border-2 border-white border-r-0 border-l-0" />}
+                                        </button>
+                                        <button onClick={() => setModalOpen(true)} className="p-2 bg-slate-700 rounded hover:bg-slate-600">
+                                            <BookOpen size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div className="chart-container">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={stockData}>
+                                            <XAxis dataKey="time" hide />
+                                            <YAxis domain={['auto', 'auto']} orientation="right" tick={{fontSize: 12, fill: '#64748b'}} />
+                                            <Tooltip 
+                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
+                                                itemStyle={{ color: '#fff' }}
+                                                labelStyle={{ display: 'none' }}
+                                            />
+                                            <ReferenceLine y={portfolio.length > 0 && portfolio[portfolio.length-1].type === 'stock' ? portfolio[portfolio.length-1].entry : null} stroke="orange" strokeDasharray="3 3" />
+                                            <Line 
+                                                type="monotone" 
+                                                dataKey="price" 
+                                                stroke="#3b82f6" 
+                                                strokeWidth={2} 
+                                                dot={false} 
+                                                isAnimationActive={false}
+                                            />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Trading Desk */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {/* Buy Stock */}
+                                <div className={`glass-panel p-4 rounded-xl flex flex-col items-center justify-between transition-all ${level < 1 ? 'opacity-50 grayscale' : 'hover:border-blue-500'}`}>
+                                    <Briefcase className="text-blue-400 mb-2" size={32} />
+                                    <h3 className="font-bold">Buy Stock</h3>
+                                    <p className="text-xs text-center text-slate-400 mb-4">Own equity. Linear profit.</p>
+                                    <button 
+                                        onClick={buyStock} 
+                                        disabled={level < 1}
+                                        className="w-full py-2 bg-slate-700 hover:bg-blue-600 rounded text-sm font-bold transition disabled:cursor-not-allowed"
+                                    >
+                                        Buy @ ${currentPrice.toFixed(2)}
+                                    </button>
+                                </div>
+
+                                {/* Buy Call */}
+                                <div className={`glass-panel p-4 rounded-xl flex flex-col items-center justify-between transition-all ${level < 2 ? 'opacity-50 grayscale' : 'hover:border-green-500'}`}>
+                                    <TrendingUp className="text-green-400 mb-2" size={32} />
+                                    <h3 className="font-bold">Buy Call (Bullish)</h3>
+                                    <p className="text-xs text-center text-slate-400 mb-4">Profit if price goes UP. Limited loss.</p>
+                                    <button 
+                                        onClick={() => buyOption('call')} 
+                                        disabled={level < 2}
+                                        className="w-full py-2 bg-slate-700 hover:bg-green-600 rounded text-sm font-bold transition disabled:cursor-not-allowed"
+                                    >
+                                        Buy Call @ ${(currentPrice * 0.05).toFixed(2)}
+                                    </button>
+                                </div>
+
+                                {/* Buy Put */}
+                                <div className={`glass-panel p-4 rounded-xl flex flex-col items-center justify-between transition-all ${level < 3 ? 'opacity-50 grayscale' : 'hover:border-red-500'}`}>
+                                    <Shield className="text-red-400 mb-2" size={32} />
+                                    <h3 className="font-bold">Buy Put (Bearish)</h3>
+                                    <p className="text-xs text-center text-slate-400 mb-4">Profit if price goes DOWN. Insurance.</p>
+                                    <button 
+                                        onClick={() => buyOption('put')} 
+                                        disabled={level < 3}
+                                        className="w-full py-2 bg-slate-700 hover:bg-red-600 rounded text-sm font-bold transition disabled:cursor-not-allowed"
+                                    >
+                                        Buy Put @ ${(currentPrice * 0.05).toFixed(2)}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: Portfolio & Stats */}
+                        <div className="space-y-6">
+                            
+                            {/* Portfolio Panel */}
+                            <div className="glass-panel rounded-xl p-4 min-h-[300px]">
+                                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                    <Briefcase size={18} /> Your Positions
+                                </h3>
+                                
+                                {portfolio.length === 0 ? (
+                                    <div className="text-center py-10 text-slate-500">
+                                        <p>No active trades.</p>
+                                        <p className="text-xs mt-2">Use the trading desk to start.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {portfolio.map(pos => {
+                                            const profit = pos.currentVal - pos.entry;
+                                            const isProfit = profit >= 0;
+                                            return (
+                                                <div key={pos.id} className="bg-slate-800 p-3 rounded border border-slate-700 relative overflow-hidden group">
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <span className={`text-xs font-bold uppercase px-1.5 py-0.5 rounded ${pos.type === 'call' ? 'bg-green-900 text-green-300' : pos.type === 'put' ? 'bg-red-900 text-red-300' : 'bg-blue-900 text-blue-300'}`}>
+                                                            {pos.type}
+                                                        </span>
+                                                        <span className={`text-sm font-mono font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                                                            {isProfit ? '+' : ''}{profit.toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between text-xs text-slate-400 mb-2">
+                                                        <span>Val: ${pos.currentVal.toFixed(2)}</span>
+                                                        {pos.type !== 'stock' && <span>Exp: {Math.max(0, pos.expiry - marketTime)} days</span>}
+                                                    </div>
+                                                    
+                                                    {pos.expired ? (
+                                                        <div className="bg-red-500/20 text-red-300 text-xs text-center py-1 rounded">Expired</div>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => closePosition(pos.id, pos.currentVal)}
+                                                            className="w-full py-1 bg-slate-700 hover:bg-slate-600 text-xs rounded text-slate-200 transition"
+                                                        >
+                                                            Close Trade
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Task Panel */}
+                            <div className="glass-panel rounded-xl p-4 bg-gradient-to-br from-indigo-900/40 to-slate-900">
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Current Objective</h3>
+                                <div className="text-white font-medium">
+                                    {level === 0 && "Complete the reading assignment."}
+                                    {level === 1 && "Buy your first share of stock."}
+                                    {level === 2 && "Buy a Call Option."}
+                                    {level === 3 && "Buy a Put Option."}
+                                    {level > 3 && "Grow your account to $15,000."}
+                                </div>
+                                {taskComplete && (
+                                    <div className="mt-3 text-green-400 text-xs font-bold animate-pulse">
+                                        Objective Complete! Keep earning XP to level up.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {/* Notification Toast */}
+                    {notification && (
+                        <div className={`fixed bottom-6 right-6 p-4 rounded-lg shadow-2xl flex items-center gap-3 animate-slide-up ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+                            {notification.type === 'error' ? <AlertTriangle size={20} /> : <Zap size={20} />}
+                            <span className="font-bold text-white">{notification.msg}</span>
+                        </div>
+                    )}
+
+                    {/* Learning Modal */}
+                    <Modal 
+                        isOpen={modalOpen} 
+                        onClose={() => setModalOpen(false)}
+                        title={LEVELS.find(l => l.id === level)?.title || "Introduction"}
+                    >
+                        {renderLessonContent()}
+                    </Modal>
+
+                    <style>{`
+                        @keyframes slide-up {
+                            from { transform: translateY(100%); opacity: 0; }
+                            to { transform: translateY(0); opacity: 1; }
+                        }
+                        .animate-slide-up {
+                            animation: slide-up 0.3s ease-out;
+                        }
+                        .animate-fade-in {
+                            animation: opacity 0.3s ease-out;
+                        }
+                    `}</style>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
